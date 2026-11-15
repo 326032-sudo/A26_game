@@ -197,6 +197,7 @@
         let currentPlayer = BLACK;
         let validMovesMap = new Map(); // "row,col" -> 変更される石の配列
         let isAnimating = false; // アニメーション中は操作をブロック
+        let gameVersion = 0; // リセット前の非同期処理を識別する
 
         // 8方向ベクトル (上, 右上, 右, 右下, 下, 左下, 左, 左上)
         const DIRECTIONS = [
@@ -225,6 +226,7 @@
         }
 
         function resetGame() {
+            gameVersion++;
             // 盤面の初期化
             boardState = Array.from({ length: 8 }, () => Array(8).fill(EMPTY));
             
@@ -301,6 +303,8 @@
             const key = `${r},${c}`;
             
             if (!validMovesMap.has(key)) return; // 置けない場所
+            const version = gameVersion;
+            const player = currentPlayer;
 
             isAnimating = true;
             
@@ -312,13 +316,14 @@
             renderCell(r, c);
 
             // 石をひっくり返すアニメーション
-            await flipDiscs(flips);
+            await flipDiscs(flips, player, version);
+            if (version !== gameVersion) return;
 
             // ターン交代処理
             switchTurn();
         }
 
-        async function flipDiscs(flips) {
+        async function flipDiscs(flips, player, version) {
             // アニメーション用にクラスを付与 (scaleX(0)にする)
             for (const [r, c] of flips) {
                 const cell = document.getElementById(`cell-${r}-${c}`);
@@ -328,15 +333,16 @@
 
             // 縮小アニメーションが終わるのを待つ
             await new Promise(resolve => setTimeout(resolve, 150));
+            if (version !== gameVersion) return;
 
             // 状態を更新して色を切り替え、拡大アニメーションに戻す
             for (const [r, c] of flips) {
-                boardState[r][c] = currentPlayer;
+                boardState[r][c] = player;
                 const cell = document.getElementById(`cell-${r}-${c}`);
                 let disc = cell.querySelector('.disc');
                 
                 // 色クラスの切り替え
-                disc.className = `disc ${currentPlayer === BLACK ? 'black' : 'white'}`;
+                disc.className = `disc ${player === BLACK ? 'black' : 'white'}`;
                 
                 // 強制リフロー (アニメーションリセットのため)
                 void disc.offsetWidth;
@@ -384,8 +390,10 @@
         }
 
         async function playComputerTurn() {
+            const version = gameVersion;
             // 少し待機して考えているように見せる
             await new Promise(resolve => setTimeout(resolve, 800));
+            if (version !== gameVersion || currentPlayer !== WHITE) return;
 
             // 簡単なAI: 最も多くひっくり返せる場所を選ぶ
             let maxFlips = -1;
